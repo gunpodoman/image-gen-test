@@ -5,90 +5,79 @@ import time
 
 # --- 보안 설정 ---
 try:
-    # Streamlit Cloud의 Settings -> Secrets에서 가져옴
     API_KEY = st.secrets["WAVESPEED_API_KEY"]
 except:
-    st.error("⚠️ Streamlit Secrets에 WAVESPEED_API_KEY를 등록해주세요.")
+    st.error("⚠️ Streamlit Secrets에 API 키를 등록해주세요.")
     st.stop()
 
-# [검증됨] 2026년 5월 WaveSpeed AI 공식 엔드포인트 규격
-# 주소 형식: https://api.wavespeed.ai/api/v3/{author}/{model}
-MODEL_ID = "wavespeed-ai/flux-schnell"
-URL = f"https://api.wavespeed.ai/api/v3/{MODEL_ID}"
+# 엔드포인트 주소
+URL = "https://api.siliconflow.cn/v1/images/generations"
 
-st.set_page_config(page_title="Wave-Stagram Pro", layout="wide")
+# [수정] 만약 Flux가 계속 막힌다면 아래 모델명 중 하나로 바꿔보세요.
+# 1순위: black-forest-labs/FLUX.1-schnell
+# 2순위: stabilityai/stable-diffusion-3-medium
+MODEL = "black-forest-labs/FLUX.1-schnell"
 
-# 인스타 감성 스타일 적용
-st.markdown("""
-    <style>
-    .main { background-color: #fafafa; }
-    div.stButton > button {
-        background: linear-gradient(45deg, #405DE6, #5851DB, #833AB4, #C13584, #E1306C, #FD1D1D);
-        color: white; border-radius: 12px; font-weight: bold; border: none; height: 3.5em;
-    }
-    img { border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-    </style>
-    """, unsafe_allow_html=True)
+st.set_page_config(page_title="AI-Stagram Pro", layout="wide")
 
-st.title("📸 Wave-Stagram")
-st.caption("2026 Optimized WaveSpeed Engine | Flux-Schnell v3")
+st.title("📸 AI-Stagram")
+st.caption(f"Model: {MODEL} | Sequential Mode")
 
-prompt = st.text_input("피드 컨셉 입력 (영문)", placeholder="e.g. A futuristic Seoul night with pink neon lights, 8k")
+prompt = st.text_input("피드 컨셉 입력 (영문)", placeholder="e.g. A shiny red apple on a white table")
 
-def generate_wavespeed_image(user_prompt):
-    """검증된 WaveSpeed v3 API 호출 로직"""
+def generate_image(p):
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
-    
-    # [검증됨] 2026 WaveSpeed 전용 데이터 규격
-    # v3 API는 'prompt'와 'output_format' 등을 최상위에 배치합니다.
     payload = {
-        "prompt": f"{user_prompt}, high-end instagram photography, 8k, realistic texture",
-        "size": "1024x1024",
-        "output_format": "webp",
-        "sync": True  # 동기식 생성을 요청 (2026 신기능)
+        "model": MODEL,
+        "prompt": f"{p}, high quality, instagram style",
+        "image_size": "1024x1024",
+        "batch_size": 1,
+        "num_inference_steps": 4
     }
     
     try:
-        # verify=False는 로컬 테스트용이나, 상용 서버에선 빼는 것이 원칙입니다.
-        resp = requests.post(URL, headers=headers, json=payload, timeout=90)
+        resp = requests.post(URL, headers=headers, json=payload, timeout=60)
         
         if resp.status_code == 200:
             data = resp.json()
-            # WaveSpeed v3는 'images' 배열 내에 'url' 혹은 'base64'를 반환합니다.
-            # 최근 규격은 성능을 위해 직접적인 image_url 혹은 data 필드를 제공함
-            if 'images' in data and len(data['images']) > 0:
-                img_info = data['images'][0]
-                # URL 형태일 경우 다운로드, Base64 형태일 경우 바로 처리
-                if img_info.get('url'):
-                    img_data = requests.get(img_info['url']).content
-                else:
-                    img_data = base64.b64decode(img_info['base64'])
-                return img_data
+            img_url = data['images'][0]['url']
+            return img_url
+        elif resp.status_code == 429:
+            st.warning("⚠️ 서버의 동시 접속 제한에 걸렸습니다. 잠시 후 자동으로 재시도합니다.")
+            time.sleep(5) # 5초 대기 후 재시도 로직
+            return "retry"
         else:
-            st.error(f"❌ API 오류: {resp.status_code}\n원인: {resp.text}")
+            st.error(f"❌ 에러 발생 ({resp.status_code}): {resp.text}")
             return None
     except Exception as e:
-        st.error(f"❌ 시스템 오류: {str(e)}")
+        st.error(f"❌ 시스템 에러: {str(e)}")
         return None
 
-if st.button("✨ 인스타 피드 생성"):
+if st.button("🚀 피드 생성하기"):
     if prompt:
-        with st.spinner("WaveSpeed 엔진이 초고화질 이미지를 렌더링 중입니다..."):
-            # 피드 구성을 위해 3장 생성
+        with st.spinner("서버 상태를 확인하며 한 장씩 생성 중입니다..."):
             images = []
-            for i in range(3):
-                img_bin = generate_wavespeed_image(prompt)
-                if img_bin:
-                    images.append(img_bin)
-            
+            # 동시 접속 제한을 피하기 위해 한 장씩 순차적으로 생성
+            for i in range(2): # 일단 안전하게 2장만 시도
+                result = generate_image(prompt)
+                
+                if result == "retry": # 재시도 로직
+                    result = generate_image(prompt)
+                
+                if result and result != "retry":
+                    images.append(result)
+                    time.sleep(2) # 생성 간격 사이에 2초 휴식 (매우 중요)
+
             if images:
-                cols = st.columns(3)
-                for idx, img in enumerate(images):
+                cols = st.columns(len(images))
+                for idx, url in enumerate(images):
                     with cols[idx]:
-                        st.image(img, use_container_width=True)
-                st.success("피드 생성 완료!")
+                        st.image(url, use_container_width=True)
+                st.success("생성 완료!")
+            else:
+                st.info("💡 만약 계속 429 에러가 난다면, SiliconCloud 설정에서 휴대폰 인증을 완료하거나 최소 금액($1)을 충전해야 할 수 있습니다.")
     else:
-        st.warning("프롬프트를 입력해 주세요.")
+        st.warning("프롬프트를 입력해주세요.")
