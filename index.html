@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>WaveSpeed AI-Stagram</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-[#fafafa] text-gray-900">
+    <!-- Nav -->
+    <nav class="sticky top-0 bg-white border-b border-gray-200 z-50 px-6 py-4 flex justify-between items-center shadow-sm">
+        <h1 class="text-2xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-500">WAVE-STAGRAM</h1>
+        <div class="flex-1 max-w-lg mx-10">
+            <input id="prompt" type="text" placeholder="영어로 아이디어를 적으세요..." class="w-full bg-gray-100 rounded-full px-6 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <button onclick="generate()" id="btn" class="bg-blue-600 text-white px-8 py-2 rounded-full font-bold shadow-lg transition hover:scale-105 active:scale-95">피드 생성</button>
+    </nav>
+
+    <!-- Main -->
+    <main class="max-w-4xl mx-auto pt-10 px-4">
+        <!-- Profile -->
+        <div class="flex items-center gap-12 mb-12 border-b pb-12 border-gray-200">
+            <div class="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
+                <div class="w-full h-full bg-white rounded-full p-1">
+                    <div class="w-full h-full bg-gray-200 rounded-full flex items-center justify-center text-gray-400 text-4xl"><i class="fa-solid fa-bolt"></i></div>
+                </div>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold mb-4">WaveSpeed_AI_Official <i class="fa-solid fa-circle-check text-blue-500 text-sm"></i></h2>
+                <div class="flex gap-8 text-sm">
+                    <span>게시물 <b id="count">0</b></span>
+                    <span>팔로워 <b>2.6M</b></span>
+                    <span>팔로잉 <b>128</b></span>
+                </div>
+                <p class="mt-4 font-semibold text-sm">Ultra-fast AI Image Generation Pipeline</p>
+            </div>
+        </div>
+
+        <!-- Grid -->
+        <div id="grid" class="grid grid-cols-3 gap-1 md:gap-6"></div>
+    </main>
+
+    <script>
+        const API = 'http://127.0.0.1:8000';
+        async function load() {
+            const r = await fetch(`${API}/images`);
+            const d = await r.json();
+            render(d.images);
+        }
+        function render(imgs) {
+            const g = document.getElementById('grid');
+            document.getElementById('count').innerText = imgs.length;
+            if(!imgs.length) return;
+            g.innerHTML = imgs.map(u => `
+                <div class="relative aspect-square overflow-hidden group shadow-sm rounded-lg">
+                    <img src="${API}${u}" class="w-full h-full object-cover transition duration-500 group-hover:scale-110 group-hover:brightness-75">
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold">
+                        <i class="fa-solid fa-heart mr-1"></i> ${Math.floor(Math.random()*999)}
+                    </div>
+                </div>
+            `).join('');
+        }
+        async function generate() {
+            const p = document.getElementById('prompt').value;
+            if(!p) return;
+            const b = document.getElementById('btn');
+            b.disabled = true; b.innerText = "WaveSpeed 가동 중...";
+            try {
+                const res = await fetch(`${API}/generate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ prompt: p })
+                });
+                await load();
+            } catch(e) { alert("서버 에러!"); }
+            finally { b.disabled = false; b.innerText = "피드 생성"; }
+        }
+        window.onload = load;
+    </script>
+</body>
+</html>
